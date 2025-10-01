@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transdev Nederland - Real-Time Command Center</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0f1419;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #1a1f2e 0%, #2d3748 100%);
+            padding: 8px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #E30613;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .system-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 15px;
+        }
+
+        .stat-badge {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.85em;
+        }
+
+        .stat-badge.critical { background: #e53e3e; }
+        .stat-badge.warning { background: #dd6b20; }
+        .stat-badge.ok { background: #38a169; }
+
+        /* Main Container */
+        .main-container {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 200px 1fr 320px;
+            gap: 8px;
+            padding: 8px;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: #1a202c;
+            border-radius: 8px;
+            padding: 10px;
+            overflow-y: auto;
+        }
+
+        .menu-item {
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #a0aec0;
+            font-size: 0.85em;
+            margin-bottom: 5px;
+        }
+
+        .menu-item:hover {
+            background: rgba(227,6,19,0.2);
+            color: #fff;
+        }
+
+        .menu-item.active {
+            background: #E30613;
+            color: #fff;
+        }
+
+        /* Map Container */
+        .map-container {
+            background: #1a202c;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            cursor: grab;
+        }
+
+        .map-container.grabbing {
+            cursor: grabbing;
+        }
+
+        .map-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 100;
+        }
+
+        .map-control-btn {
+            width: 36px;
+            height: 36px;
+            background: rgba(0,0,0,0.85);
+            border: 1px solid #4a5568;
+            color: #fff;
+            cursor: pointer;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .map-control-btn:hover {
+            background: rgba(227,6,19,0.6);
+        }
+
+        .map-control-btn.active {
+            background: #E30613;
+        }
+
+        .map-viewport {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .map-content {
+            position: absolute;
+            transition: none;
+            transform-origin: center center;
+            width: 1200px;
+            height: 1400px;
+        }
+
+        /* Bus markers */
+        .bus-marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: #38a169;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 0 10px rgba(56,161,105,0.6);
+            z-index: 20;
+            font-size: 9px;
+            font-weight: bold;
+            color: white;
+            transform: translate(-50%, -50%);
+            border: 2px solid rgba(255,255,255,0.4);
+        }
+
+        .bus-marker:hover {
+            transform: translate(-50%, -50%) scale(1.3);
+            z-index: 100;
+        }
+
+        .bus-marker.delayed {
+            background: #dd6b20;
+            box-shadow: 0 0 10px rgba(221,107,32,0.6);
+        }
+
+        .bus-marker.stopped {
+            background: #e53e3e;
+            box-shadow: 0 0 10px rgba(229,62,62,0.6);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        /* Right Panel */
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .panel {
+            background: #1a202c;
+            border-radius: 8px;
+            padding: 12px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .panel-title {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9em;
+        }
+
+        .incident-item {
+            background: rgba(255,255,255,0.05);
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 8px;
+            border-left: 3px solid #e53e3e;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.85em;
+        }
+
+        .incident-item:hover {
+            background: rgba(255,255,255,0.08);
+        }
+
+        .incident-item.warning { border-left-color: #dd6b20; }
+
+        .zoom-indicator {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.85);
+            padding: 6px 10px;
+            border-radius: 5px;
+            font-size: 11px;
+            z-index: 100;
+        }
+
+        .live-indicator {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(227,6,19,0.9);
+            padding: 6px 12px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            z-index: 100;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #48bb78;
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Traffic styles */
+        .traffic-line {
+            stroke-linecap: round;
+            fill: none;
+            opacity: 0.8;
+            cursor: pointer;
+        }
+
+        .traffic-heavy { stroke: #e53e3e; stroke-width: 8; }
+        .traffic-slow { stroke: #f6ad55; stroke-width: 6; }
+        .traffic-normal { stroke: #48bb78; stroke-width: 4; }
+
+        .city-dot {
+            fill: white;
+            stroke: #4a5568;
+            stroke-width: 1.5;
+            cursor: pointer;
+        }
+
+        .city-label {
+            fill: #cbd5e0;
+            font-size: 10px;
+            font-weight: 500;
+            pointer-events: none;
+        }
+
+        .major-city {
+            font-size: 12px;
+            fill: white;
+            font-weight: bold;
+        }
+
+        .highway-label {
+            fill: white;
+            background: #e53e3e;
+            font-size: 9px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="logo">
+            <div class="system-title">🚌 TRANSDEV COMMAND CENTER NEDERLAND</div>
+        </div>
+        
+        <div class="header-stats">
+            <div class="stat-badge ok">
+                <span>✓</span>
+                <span id="activeCount">847</span>
+                <span>Actief</span>
+            </div>
+            <div class="stat-badge warning">
+                <span>⚠️</span>
+                <span id="warningCount">23</span>
+                <span>Vertraagd</span>
+            </div>
+            <div class="stat-badge critical">
+                <span>🔴</span>
+                <span id="criticalCount">5</span>
+                <span>Storing</span>
+            </div>
+        </div>
+        
+        <div style="font-size: 0.85em; color: #a0aec0;">
+            <div id="currentTime" style="font-weight: bold;">10:45:23</div>
+            <div>Woensdag 1 Oktober 2025</div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="menu-item active">
+                <span>📊</span>
+                <span>Dashboard</span>
+            </div>
+            <div class="menu-item">
+                <span>🚌</span>
+                <span>Voertuigen</span>
+            </div>
+            <div class="menu-item">
+                <span>🚦</span>
+                <span>Live Verkeer</span>
+            </div>
+            <div class="menu-item">
+                <span>📍</span>
+                <span>Routes</span>
+            </div>
+            <div class="menu-item">
+                <span>🚨</span>
+                <span>Incidenten</span>
+            </div>
+            <div class="menu-item">
+                <span>👥</span>
+                <span>Chauffeurs</span>
+            </div>
+            <div class="menu-item">
+                <span>📊</span>
+                <span>Rapportages</span>
+            </div>
+        </div>
+
+        <!-- Map Container -->
+        <div class="map-container" id="mapContainer">
+            <div class="live-indicator">
+                <div class="live-dot"></div>
+                <span>LIVE</span>
+            </div>
+            
+            <div class="map-controls">
+                <button class="map-control-btn" onclick="zoomIn()" title="Zoom In">+</button>
+                <button class="map-control-btn" onclick="zoomOut()" title="Zoom Out">−</button>
+                <button class="map-control-btn" onclick="resetView()" title="Reset">⟲</button>
+                <button class="map-control-btn" id="trafficBtn" onclick="toggleTraffic()" title="Verkeer">🚦</button>
+                <button class="map-control-btn" onclick="focusAmsterdam()" title="Amsterdam">A</button>
+            </div>
+            
+            <div class="map-viewport">
+                <div class="map-content" id="mapContent">
+                    <!-- Geografisch accurate kaart van Nederland -->
+                    <svg width="1200" height="1400" viewBox="0 0 1200 1400">
+                        <!-- Achtergrond water -->
+                        <rect width="1200" height="1400" fill="#1e3a5f" opacity="0.3"/>
+                        
+                        <!-- Nederland landmassa (geografisch accuraat) -->
+                        <path d="
+                            M 400 250 L 420 230 L 450 220 L 480 210 L 520 200 L 560 195 L 600 190 L 640 195 L 680 200 L 700 210
+                            L 720 230 L 730 250 L 735 280 L 740 310 L 745 340 L 750 370 L 755 400 L 760 430 L 765 460 L 770 490
+                            L 775 520 L 780 550 L 785 580 L 790 610 L 795 640 L 800 670 L 805 700 L 810 730 L 815 760 L 820 790
+                            L 825 820 L 830 850 L 835 880 L 840 910 L 845 940 L 850 970 L 855 1000 L 860 1030 L 865 1060
+                            L 870 1090 L 875 1120 L 880 1150 L 885 1180 L 890 1210 L 895 1240 L 900 1270
+                            L 890 1280 L 870 1285 L 840 1290 L 800 1295 L 750 1300 L 700 1295 L 650 1290 L 600 1285 L 550 1280
+                            L 500 1275 L 450 1270 L 400 1265 L 350 1260
+                            L 340 1230 L 335 1200 L 330 1170 L 325 1140 L 320 1110 L 315 1080 L 310 1050 L 305 1020 L 300 990
+                            L 295 960 L 290 930 L 285 900 L 280 870 L 275 840 L 270 810 L 265 780 L 260 750 L 255 720 L 250 690
+                            L 245 660 L 240 630 L 235 600 L 230 570 L 225 540 L 220 510 L 215 480 L 210 450 L 205 420 L 200 390
+                            L 195 360 L 190 330 L 185 300 L 190 280 L 200 260 L 220 250 L 250 245 L 280 240 L 320 238 L 360 240
+                            L 400 250 Z
+                        " fill="#2d3748" stroke="#4a5568" stroke-width="2"/>
+                        
+                        <!-- IJsselmeer -->
+                        <path d="M 500 400 Q 520 380 540 400 L 540 550 Q 520 570 500 550 Z" fill="#1e3a5f" opacity="0.5"/>
+                        
+                        <!-- Markermeer -->
+                        <path d="M 480 550 L 520 550 L 520 620 L 480 620 Z" fill="#1e3a5f" opacity="0.5"/>
+                        
+                        <!-- Waddenzee/Eilanden -->
+                        <g>
+                            <ellipse cx="450" cy="180" rx="30" ry="15" fill="#2d3748" stroke="#4a5568"/>
+                            <ellipse cx="520" cy="175" rx="25" ry="12" fill="#2d3748" stroke="#4a5568"/>
+                            <ellipse cx="580" cy="170" rx="20" ry="10" fill="#2d3748" stroke="#4a5568"/>
+                            <ellipse cx="630" cy="165" rx="18" ry="8" fill="#2d3748" stroke="#4a5568"/>
+                            <ellipse cx="670" cy="160" rx="15" ry="8" fill="#2d3748" stroke="#4a5568"/>
+                        </g>
+                        
+                        <!-- Zeeland eilanden -->
+                        <g>
+                            <ellipse cx="280" cy="1150" rx="40" ry="20" fill="#2d3748" stroke="#4a5568"/>
+                            <ellipse cx="350" cy="1160" rx="35" ry="18" fill="#2d3748" stroke="#4a5568"/>
+                            <ellipse cx="250" cy="1180" rx="30" ry="15" fill="#2d3748" stroke="#4a5568"/>
+                        </g>
+                        
+                        <!-- Snelwegen -->
+                        <g id="highways" stroke-width="3" fill="none" opacity="0.7">
+                            <!-- A1 Amsterdam - Duitsland -->
+                            <path d="M 470 520 L 550 510 L 650 500 L 750 490 L 850 480" stroke="#4a5568" stroke-dasharray="10,5"/>
+                            <rect x="600" y="495" width="20" height="12" fill="#E30613" rx="2"/>
+                            <text x="610" y="503" text-anchor="middle" class="highway-label">A1</text>
+                            
+                            <!-- A2 Amsterdam - Maastricht -->
+                            <path d="M 470 520 L 480 620 L 490 720 L 500 820 L 510 920 L 520 1020 L 530 1120 L 540 1220" stroke="#4a5568" stroke-dasharray="10,5"/>
+                            <rect x="490" y="770" width="20" height="12" fill="#E30613" rx="2"/>
+                            <text x="500" y="778" text-anchor="middle" class="highway-label">A2</text>
+                            
+                            <!-- A4 Amsterdam - België -->
+                            <path d="M 470 520 L 450 600 L 430 680 L 410 760 L 390 840 L 370 920 L 350 1000" stroke="#4a5568" stroke-dasharray="10,5"/>
+                            <rect x="420" y="680" width="20" height="12" fill="#E30613" rx="2"/>
+                            <text x="430" y="688" text-anchor="middle" class="highway-label">A4</text>
+                            
+                            <!-- A7 Zaandam - Groningen -->
+                            <path d="M 450 510 L 500 420 L 550 380 L 600 360 L 650 350 L 700 340" stroke="#4a5568" stroke-dasharray="10,5"/>
+                            <rect x="550" y="380" width="20" height="12" fill="#E30613" rx="2"/>
+                            <text x="560" y="388" text-anchor="middle" class="highway-label">A7</text>
+                            
+                            <!-- A9 Alkmaar - Amsterdam -->
+                            <path d="M 430 440 L 450 480 L 470 520" stroke="#4a5568" stroke-dasharray="10,5"/>
+                            <rect x="440" y="475" width="20" height="12" fill="#E30613" rx="2"/>
+                            <text x="450" y="483" text-anchor="middle" class="highway-label">A9</text>
+                            
+                            <!-- A10 Ring Amsterdam -->
+                            <circle cx="470" cy="520" r="40" stroke="#4a5568" fill="none" stroke-dasharray="10,5"/>
+                            <rect x="500" y="515" width="25" height="12" fill="#E30613" rx="2"/>
+                            <text x="512" y="523" text-anchor="middle" class="highway-label">A10</text>
+                            
+                            <!-- A12 Den Haag - Duitsland -->
+                            <path d="M 380 620 L 480 610 L 580 600 L 680 590 L 780 580" stroke="#4a5568" stroke-dasharray="10,5"/>
+                            <rect x="530" y="595" width="25" height="12" fill="#E30613" rx="2"/>
+                            <text x="542" y="603" text-anchor="middle" class="highway-label">A12</text>
+                            
+                            <!-- A27 Breda - Almere -->
+                            <path d="M 450 950 L 460 850 L 470 750 L 480 650 L 490 550 L 500 450" stroke="#4a5568" stroke-dasharray="10,5"/>
+                            <rect x="470" y="700" width="25" height="12" fill="#E30613" rx="2"/>
+                            <text x="482" y="708" text-anchor="middle" class="highway-label">A27</text>
+                            
+                            <!-- A28 Utrecht - Groningen -->
+                            <path d="M 520 600 L 550 500 L 580 400 L 610 350 L 640 320 L 670 300" stroke="#4a5568" stroke-dasharray="10,5"/>
+                            <rect x="560" y="450" width="25" height="12" fill="#E30613" rx="2"/>
+                            <text x="572" y="458" text-anchor="middle" class="highway-label">A28</text>
+                        </g>
+                        
+                        <!-- Verkeer overlay -->
+                        <g id="trafficOverlay" style="display: none;">
+                            <!-- A2 file bij Amsterdam -->
+                            <path d="M 470 520 L 475 570" class="traffic-line traffic-heavy"/>
+                            
+                            <!-- A4 langzaam verkeer -->
+                            <path d="M 445 580 L 435 630" class="traffic-line traffic-slow"/>
+                            
+                            <!-- A10 Ring druk -->
+                            <path d="M 470 480 Q 510 520 470 560" class="traffic-line traffic-slow"/>
+                            
+                            <!-- A12 bij Utrecht -->
+                            <path d="M 520 605 L 580 600" class="traffic-line traffic-heavy"/>
+                            
+                            <!-- A27 bij Utrecht -->
+                            <path d="M 475 620 L 480 670" class="traffic-line traffic-slow"/>
+                            
+                            <!-- Rotterdam gebied -->
+                            <path d="M 415 700 L 420 730" class="traffic-line traffic-heavy"/>
+                            
+                            <!-- A1 normaal -->
+                            <path d="M 650 500 L 700 495" class="traffic-line traffic-normal"/>
+                        </g>
+                        
+                        <!-- Grote steden -->
+                        <g id="cities">
+                            <!-- Amsterdam -->
+                            <circle cx="470" cy="520" r="8" class="city-dot"/>
+                            <text x="470" y="510" text-anchor="middle" class="city-label major-city">Amsterdam</text>
+                            
+                            <!-- Rotterdam -->
+                            <circle cx="415" cy="700" r="7" class="city-dot"/>
+                            <text x="415" y="690" text-anchor="middle" class="city-label major-city">Rotterdam</text>
+                            
+                            <!-- Den Haag -->
+                            <circle cx="380" cy="650" r="7" class="city-dot"/>
+                            <text x="380" y="640" text-anchor="middle" class="city-label major-city">Den Haag</text>
+                            
+                            <!-- Utrecht -->
+                            <circle cx="520" cy="620" r="7" class="city-dot"/>
+                            <text x="520" y="610" text-anchor="middle" class="city-label major-city">Utrecht</text>
+                            
+                            <!-- Eindhoven -->
+                            <circle cx="540" cy="900" r="6" class="city-dot"/>
+                            <text x="540" y="890" text-anchor="middle" class="city-label">Eindhoven</text>
+                            
+                            <!-- Groningen -->
+                            <circle cx="680" cy="320" r="6" class="city-dot"/>
+                            <text x="680" y="310" text-anchor="middle" class="city-label">Groningen</text>
+                            
+                            <!-- Tilburg -->
+                            <circle cx="500" cy="920" r="5" class="city-dot"/>
+                            <text x="500" y="935" text-anchor="middle" class="city-label">Tilburg</text>
+                            
+                            <!-- Breda -->
+                            <circle cx="450" cy="950" r="5" class="city-dot"/>
+                            <text x="450" y="965" text-anchor="middle" class="city-label">Breda</text>
+                            
+                            <!-- Nijmegen -->
+                            <circle cx="590" cy="730" r="5" class="city-dot"/>
+                            <text x="590" y="745" text-anchor="middle" class="city-label">Nijmegen</text>
+                            
+                            <!-- Arnhem -->
+                            <circle cx="610" cy="710" r="5" class="city-dot"/>
+                            <text x="610" y="725" text-anchor="middle" class="city-label">Arnhem</text>
+                            
+                            <!-- Apeldoorn -->
+                            <circle cx="600" cy="630" r="4" class="city-dot"/>
+                            <text x="600" y="645" text-anchor="middle" class="city-label">Apeldoorn</text>
+                            
+                            <!-- Haarlem -->
+                            <circle cx="440" cy="515" r="4" class="city-dot"/>
+                            <text x="415" y="515" text-anchor="middle" class="city-label">Haarlem</text>
+                            
+                            <!-- Almere -->
+                            <circle cx="510" cy="540" r="4" class="city-dot"/>
+                            <text x="510" y="555" text-anchor="middle" class="city-label">Almere</text>
+                            
+                            <!-- Zwolle -->
+                            <circle cx="600" cy="480" r="4" class="city-dot"/>
+                            <text x="600" y="495" text-anchor="middle" class="city-label">Zwolle</text>
+                            
+                            <!-- Leeuwarden -->
+                            <circle cx="570" cy="350" r="4" class="city-dot"/>
+                            <text x="570" y="365" text-anchor="middle" class="city-label">Leeuwarden</text>
+                            
+                            <!-- Enschede -->
+                            <circle cx="700" cy="520" r="4" class="city-dot"/>
+                            <text x="700" y="535" text-anchor="middle" class="city-label">Enschede</text>
+                            
+                            <!-- Maastricht -->
+                            <circle cx="570" cy="1180" r="4" class="city-dot"/>
+                            <text x="570" y="1195" text-anchor="middle" class="city-label">Maastricht</text>
+                            
+                            <!-- Alkmaar -->
+                            <circle cx="450" cy="460" r="3" class="city-dot"/>
+                            <text x="450" y="475" text-anchor="middle" class="city-label">Alkmaar</text>
+                            
+                            <!-- Zaandam -->
+                            <circle cx="455" cy="505" r="3" class="city-dot"/>
+                            <text x="455" y="500" text-anchor="middle" class="city-label">Zaandam</text>
+                            
+                            <!-- Leiden -->
+                            <circle cx="420" cy="630" r="3" class="city-dot"/>
+                            <text x="420" y="645" text-anchor="middle" class="city-label">Leiden</text>
+                            
+                            <!-- Delft -->
+                            <circle cx="400" cy="670" r="3" class="city-dot"/>
+                            <text x="400" y="685" text-anchor="middle" class="city-label">Delft</text>
+                            
+                            <!-- Dordrecht -->
+                            <circle cx="435" cy="720" r="3" class="city-dot"/>
+                            <text x="435" y="735" text-anchor="middle" class="city-label">Dordrecht</text>
+                            
+                            <!-- Amersfoort -->
+                            <circle cx="540" cy="590" r="3" class="city-dot"/>
+                            <text x="540" y="605" text-anchor="middle" class="city-label">Amersfoort</text>
+                            
+                            <!-- Hilversum -->
+                            <circle cx="510" cy="590" r="3" class="city-dot"/>
+                            <text x="510" y="580" text-anchor="middle" class="city-label">Hilversum</text>
+                            
+                            <!-- Hoofddorp -->
+                            <circle cx="455" cy="540" r="3" class="city-dot"/>
+                            <text x="455" y="555" text-anchor="middle" class="city-label">Hoofddorp</text>
+                            
+                            <!-- Lelystad -->
+                            <circle cx="530" cy="500" r="3" class="city-dot"/>
+                            <text x="530" y="515" text-anchor="middle" class="city-label">Lelystad</text>
+                            
+                            <!-- Assen -->
+                            <circle cx="650" cy="380" r="3" class="city-dot"/>
+                            <text x="650" y="395" text-anchor="middle" class="city-label">Assen</text>
+                            
+                            <!-- Emmen -->
+                            <circle cx="680" cy="420" r="3" class="city-dot"/>
+                            <text x="680" y="435" text-anchor="middle" class="city-label">Emmen</text>
+                            
+                            <!-- Venlo -->
+                            <circle cx="620" cy="1020" r="3" class="city-dot"/>
+                            <text x="620" y="1035" text-anchor="middle" class="city-label">Venlo</text>
+                            
+                            <!-- 's-Hertogenbosch -->
+                            <circle cx="530" cy="850" r="3" class="city-dot"/>
+                            <text x="530" y="865" text-anchor="middle" class="city-label">'s-Hertogenbosch</text>
+                            
+                            <!-- Middelburg -->
+                            <circle cx="290" cy="1100" r="3" class="city-dot"/>
+                            <text x="290" y="1115" text-anchor="middle" class="city-label">Middelburg</text>
+                        </g>
+                        
+                        <!-- Schiphol -->
+                        <text x="460" y="545" font-size="18">✈️</text>
+                        <text x="445" y="560" class="city-label" style="font-size: 8px;">Schiphol</text>
+                    </svg>
+                    
+                    <!-- Bus Markers op realistische posities -->
+                    <!-- Amsterdam/Schiphol regio -->
+                    <div class="bus-marker" style="left: 470px; top: 520px;" title="Lijn 397 - Amsterdam CS">397</div>
+                    <div class="bus-marker delayed" style="left: 455px; top: 540px;" title="Lijn 346 - Schiphol Plaza">346</div>
+                    <div class="bus-marker" style="left: 440px; top: 515px;" title="Lijn 300 - Haarlem">300</div>
+                    <div class="bus-marker stopped" style="left: 460px; top: 545px;" title="Lijn 81 - Storing">81</div>
+                    <div class="bus-marker" style="left: 455px; top: 505px;" title="Lijn 82 - Zaandam">82</div>
+                    <div class="bus-marker" style="left: 510px; top: 540px;" title="Lijn 150 - Almere">150</div>
+                    
+                    <!-- Utrecht regio -->
+                    <div class="bus-marker" style="left: 520px; top: 620px;" title="Lijn 12 - Utrecht CS">12</div>
+                    <div class="bus-marker delayed" style="left: 540px; top: 590px;" title="Lijn 50 - Amersfoort">50</div>
+                    <div class="bus-marker" style="left: 510px; top: 590px;" title="Lijn 320 - Hilversum">320</div>
+                    
+                    <!-- Rotterdam/Den Haag regio -->
+                    <div class="bus-marker" style="left: 415px; top: 700px;" title="Lijn 44 - Rotterdam CS">44</div>
+                    <div class="bus-marker" style="left: 380px; top: 650px;" title="Lijn 23 - Den Haag CS">23</div>
+                    <div class="bus-marker stopped" style="left: 400px; top: 670px;" title="Lijn 174 - Delft">174</div>
+                    <div class="bus-marker" style="left: 420px; top: 630px;" title="Lijn 430 - Leiden">430</div>
+                    <div class="bus-marker delayed" style="left: 435px; top: 720px;" title="Lijn 316 - Dordrecht">316</div>
+                    
+                    <!-- Brabant -->
+                    <div class="bus-marker" style="left: 540px; top: 900px;" title="Lijn 401 - Eindhoven">401</div>
+                    <div class="bus-marker" style="left: 500px; top: 920px;" title="Lijn 142 - Tilburg">142</div>
+                    <div class="bus-marker" style="left: 450px; top: 950px;" title="Lijn 19 - Breda">19</div>
+                    <div class="bus-marker delayed" style="left: 530px; top: 850px;" title="Lijn 301 - Den Bosch">301</div>
+                    
+                    <!-- Noord Nederland -->
+                    <div class="bus-marker" style="left: 680px; top: 320px;" title="Lijn 163 - Groningen">163</div>
+                    <div class="bus-marker" style="left: 570px; top: 350px;" title="Lijn 66 - Leeuwarden">66</div>
+                    <div class="bus-marker delayed" style="left: 600px; top: 480px;" title="Lijn 1 - Zwolle">1</div>
+                    <div class="bus-marker" style="left: 650px; top: 380px;" title="Lijn 59 - Assen">59</div>
+                    
+                    <!-- Oost Nederland -->
+                    <div class="bus-marker" style="left: 590px; top: 730px;" title="Lijn 325 - Nijmegen">325</div>
+                    <div class="bus-marker" style="left: 610px; top: 710px;" title="Lijn 331 - Arnhem">331</div>
+                    <div class="bus-marker" style="left: 600px; top: 630px;" title="Lijn 108 - Apeldoorn">108</div>
+                    <div class="bus-marker" style="left: 700px; top: 520px;" title="Lijn 2 - Enschede">2</div>
+                    
+                    <!-- Limburg -->
+                    <div class="bus-marker" style="left: 570px; top: 1180px;" title="Lijn 50 - Maastricht">50</div>
+                    <div class="bus-marker" style="left: 620px; top: 1020px;" title="Lijn 77 - Venlo">77</div>
+                    
+                    <!-- Zeeland -->
+                    <div class="bus-marker" style="left: 290px; top: 1100px;" title="Lijn 133 - Middelburg">133</div>
+                </div>
+            </div>
+            
+            <div class="zoom-indicator" id="zoomIndicator">Zoom: 100%</div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="right-panel">
+            <!-- Performance -->
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span>📊</span>
+                        <span>Performance</span>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85em;">
+                    <div>
+                        <div style="color: #718096;">Punctualiteit</div>
+                        <div style="font-size: 1.5em; font-weight: bold; color: #48bb78;">96.3%</div>
+                    </div>
+                    <div>
+                        <div style="color: #718096;">Gem. Vertraging</div>
+                        <div style="font-size: 1.5em; font-weight: bold; color: #f6ad55;">2.8m</div>
+                    </div>
+                    <div>
+                        <div style="color: #718096;">Rituitval</div>
+                        <div style="font-size: 1.5em; font-weight: bold; color: #48bb78;">0.4%</div>
+                    </div>
+                    <div>
+                        <div style="color: #718096;">Bezetting</div>
+                        <div style="font-size: 1.5em; font-weight: bold; color: #48bb78;">87%</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Incidents -->
+            <div class="panel" style="flex: 1; overflow-y: auto;">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span>🚨</span>
+                        <span>Live Incidenten</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="incident-item">
+                        <div style="font-size: 0.75em; color: #718096;">10:45 - Amsterdam</div>
+                        <div style="font-weight: bold;">Lijn 81 - Motor storing</div>
+                        <div>Schiphol Plaza - Bus stilgevallen</div>
+                    </div>
+                    
+                    <div class="incident-item warning">
+                        <div style="font-size: 0.75em; color: #718096;">10:42 - A2 Utrecht</div>
+                        <div style="font-weight: bold;">File 8km</div>
+                        <div>Richting Amsterdam - 15 min extra</div>
+                    </div>
+                    
+                    <div class="incident-item">
+                        <div style="font-size: 0.75em; color: #718096;">10:38 - Delft</div>
+                        <div style="font-weight: bold;">Lijn 174 - Blokkade</div>
+                        <div>Demonstratie station - Omleiding</div>
+                    </div>
+                    
+                    <div class="incident-item warning">
+                        <div style="font-size: 0.75em; color: #718096;">10:35 - Rotterdam</div>
+                        <div style="font-weight: bold;">A20 ongeval</div>
+                        <div>2 rijstroken dicht - File groeit</div>
+                    </div>
+                    
+                    <div class="incident-item warning">
+                        <div style="font-size: 0.75em; color: #718096;">10:32 - Den Bosch</div>
+                        <div style="font-weight: bold;">Lijn 301 - Vertraging</div>
+                        <div>Wegwerkzaamheden centrum</div>
+                    </div>
+                    
+                    <div class="incident-item">
+                        <div style="font-size: 0.75em; color: #718096;">10:28 - Zwolle</div>
+                        <div style="font-weight: bold;">Lijn 1 - Chauffeur ziek</div>
+                        <div>Vervanger onderweg</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Map controls
+        let scale = 1;
+        let translateX = 0;
+        let translateY = 0;
+        let isDragging = false;
+        let startX, startY;
+        let trafficVisible = false;
+        
+        const mapContainer = document.getElementById('mapContainer');
+        const mapContent = document.getElementById('mapContent');
+        const zoomIndicator = document.getElementById('zoomIndicator');
+        
+        function updateTransform() {
+            mapContent.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+            zoomIndicator.textContent = `Zoom: ${Math.round(scale * 100)}%`;
+        }
+        
+        function zoomIn() {
+            if (scale < 3) {
+                scale *= 1.2;
+                updateTransform();
+            }
+        }
+        
+        function zoomOut() {
+            if (scale > 0.5) {
+                scale /= 1.2;
+                updateTransform();
+            }
+        }
+        
+        function resetView() {
+            scale = 1;
+            translateX = 0;
+            translateY = 0;
+            updateTransform();
+        }
+        
+        function toggleTraffic() {
+            trafficVisible = !trafficVisible;
+            const trafficOverlay = document.getElementById('trafficOverlay');
+            trafficOverlay.style.display = trafficVisible ? 'block' : 'none';
+            document.getElementById('trafficBtn').classList.toggle('active', trafficVisible);
+        }
+        
+        function focusAmsterdam() {
+            scale = 2.5;
+            translateX = -700;
+            translateY = -800;
+            updateTransform();
+        }
+        
+        // Mouse wheel zoom
+        mapContainer.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            const newScale = scale * delta;
+            
+            if (newScale >= 0.5 && newScale <= 3) {
+                const rect = mapContainer.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                translateX = mouseX - (mouseX - translateX) * delta;
+                translateY = mouseY - (mouseY - translateY) * delta;
+                scale = newScale;
+                updateTransform();
+            }
+        });
+        
+        // Drag to pan
+        mapContainer.addEventListener('mousedown', (e) => {
+            if (e.target === mapContainer || e.target.closest('.map-viewport')) {
+                isDragging = true;
+                startX = e.clientX - translateX;
+                startY = e.clientY - translateY;
+                mapContainer.classList.add('grabbing');
+            }
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            translateX = e.clientX - startX;
+            translateY = e.clientY - startY;
+            updateTransform();
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            mapContainer.classList.remove('grabbing');
+        });
+        
+        // Bus marker clicks
+        document.querySelectorAll('.bus-marker').forEach(marker => {
+            marker.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const line = marker.textContent;
+                const status = marker.classList.contains('stopped') ? 'Storing' :
+                             marker.classList.contains('delayed') ? 'Vertraagd' : 'Actief';
+                alert(`Lijn ${line}\nStatus: ${status}\nChauffeur: ${Math.floor(Math.random() * 900 + 100)}\nReizigers: ${Math.floor(Math.random() * 60 + 10)}`);
+            });
+        });
+        
+        // Animate buses
+        function animateBuses() {
+            document.querySelectorAll('.bus-marker:not(.stopped)').forEach(marker => {
+                if (Math.random() > 0.7) {
+                    const left = parseFloat(marker.style.left);
+                    const top = parseFloat(marker.style.top);
+                    marker.style.left = (left + (Math.random() - 0.5) * 5) + 'px';
+                    marker.style.top = (top + (Math.random() - 0.5) * 5) + 'px';
+                }
+            });
+        }
+        
+        // Update stats
+        function updateStats() {
+            document.getElementById('activeCount').textContent = 840 + Math.floor(Math.random() * 20);
+            document.getElementById('warningCount').textContent = 20 + Math.floor(Math.random() * 10);
+            document.getElementById('criticalCount').textContent = Math.floor(Math.random() * 8) + 2;
+        }
+        
+        // Update time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = 
+                now.toLocaleTimeString('nl-NL');
+        }
+        
+        // Initialize
+        setInterval(animateBuses, 5000);
+        setInterval(updateStats, 10000);
+        setInterval(updateTime, 1000);
+        updateTime();
+    </script>
+</body>
+</html>
